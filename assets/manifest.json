@@ -1,0 +1,12 @@
+{
+  "brand": "Demon Jewellery",
+  "tagline": "Brillante Estilo",
+  "assets": [
+    { "path": "img/logo_demon_jewellery.png", "type": "image", "role": "logo" },
+    { "path": "img/producto_01.jpg", "type": "image" },
+    { "path": "img/producto_02.jpg", "type": "image" },
+    { "path": "img/producto_03.jpg", "type": "image" },
+    { "path": "img/producto_04.jpg", "type": "image" }
+  ],
+  "note": "El conector subió los archivos de código. Los binarios pueden subirse manualmente o mantenerse como imágenes existentes del repositorio."
+}
