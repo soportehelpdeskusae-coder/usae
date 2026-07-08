@@ -1,0 +1,23 @@
+name: Validate Apps Script Repo
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        run: |
+          test -f README.md
+          test -f src/Code.gs
+          test -f src/Config.gs
+          test -f src/Backend.gs
+          test -f src/Index.html
+          test -f src/Styles.html
+          test -f src/Scripts.html
+          test -f src/appsscript.json
+      - name: Show structure
+        run: find . -maxdepth 3 -type f | sort
