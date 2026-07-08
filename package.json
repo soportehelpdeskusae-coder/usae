@@ -1,0 +1,16 @@
+{
+  "name": "demon-jewellery-appscript",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sitio web Apps Script para Demon Jewellery con catálogo, pedidos y diseños personalizados.",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "deploy": "clasp deploy --description \"Demon Jewellery WebApp\"",
+    "open": "clasp open"
+  },
+  "devDependencies": {
+    "@google/clasp": "latest"
+  }
+}
