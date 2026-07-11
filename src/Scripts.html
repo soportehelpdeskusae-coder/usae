@@ -1,13 +1,406 @@
 <script>
-const $=s=>document.querySelector(s);function formObj(f){return Object.fromEntries(new FormData(f).entries())}function money(n){n=Number(n||0);return n?('$'+n.toLocaleString('es-MX')+' MXN'):'A cotizar'}function call(fn,...args){return new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(e=>rej(e))[fn](...args))}
-async function cargarCatalogo(){const out=$('#catalogoGrid');out.innerHTML='<p>Cargando...</p>';try{const data=await call('obtenerCatalogo',{q:$('#q').value,categoria:$('#categoria').value});out.innerHTML=data.map(p=>`<article class="card product"><div class="img">${p.imageUrl?`<img src="${p.imageUrl}" style="max-width:100%;max-height:100%;border-radius:18px">`:'Demon Jewellery'}</div><h3>${p.nombre}</h3><p>${p.descripcion||''}</p><p><b>${p.material||''}</b></p><div class="price">${money(p.precioMXN)}</div><div class="actions"><button class="btn small" onclick="seleccionar('${p.productId}')">Comprar</button><a class="btn small ghost" target="_blank" href="${p.whatsappUrl}">WhatsApp</a></div></article>`).join('')||'<p>No hay productos.</p>';}catch(e){out.innerHTML='<p class="err">Error: '+e+'</p>'}}
-function seleccionar(id){document.querySelector('[name=productId]').value=id;location.hash='pedido'}
-async function cargarCategorias(){try{const cats=APP.categories||await call('obtenerCategorias');$('#categoria').innerHTML='<option value="">Todas</option>'+cats.map(c=>`<option>${c}</option>`).join('')}catch(e){}}
-async function registrarPedido(ev){ev.preventDefault();const msg=$('#pedidoMsg');msg.textContent='Registrando...';try{const r=await call('registrarCompra',formObj(ev.target));if(!r.ok){msg.innerHTML='<p class="err">'+r.message+'</p>';return}msg.innerHTML=`<p class="ok">Pedido creado: <b>${r.data.orderId}</b></p><p>Referencia de pago: <b>${r.data.paymentReference}</b></p><p>Total: ${money(r.data.totalMXN)}</p><a class="btn small" target="_blank" href="${r.data.whatsappUrl}">Enviar por WhatsApp</a>`;ev.target.reset()}catch(e){msg.innerHTML='<p class="err">'+e+'</p>'}}
-async function registrarDisenoWeb(ev){ev.preventDefault();const msg=$('#disenoMsg');msg.textContent='Enviando...';try{const r=await call('registrarDiseno',formObj(ev.target));if(!r.ok){msg.innerHTML='<p class="err">'+r.message+'</p>';return}msg.innerHTML=`<p class="ok">Solicitud creada: <b>${r.data.designId}</b></p><a class="btn small" target="_blank" href="${r.data.whatsappUrl}">Enviar por WhatsApp</a>`;ev.target.reset()}catch(e){msg.innerHTML='<p class="err">'+e+'</p>'}}
-async function consultar(ev){ev.preventDefault();const o=$('#seguimientoMsg');o.textContent='Consultando...';try{const r=await call('consultarSeguimiento',$('#folio').value,$('#contacto').value);o.textContent=r.ok?JSON.stringify(r.data.item,null,2):r.message}catch(e){o.textContent=e}}
-function table(rows){if(!rows||!rows.length)return'<p>Sin datos.</p>';const keys=Object.keys(rows[0]).slice(0,10);return'<table><thead><tr>'+keys.map(k=>'<th>'+k+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+keys.map(k=>'<td>'+String(r[k]||'')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
-async function adminPedidos(){const out=$('#adminOut');out.textContent='Cargando...';try{const r=await call('admin_listarPedidos',$('#pin').value);out.innerHTML=r.ok?table(r.data):'<p class="err">'+r.message+'</p>'}catch(e){out.innerHTML='<p class="err">'+e+'</p>'}}
-async function adminDisenos(){const out=$('#adminOut');out.textContent='Cargando...';try{const r=await call('admin_listarDisenos',$('#pin').value);out.innerHTML=r.ok?table(r.data):'<p class="err">'+r.message+'</p>'}catch(e){out.innerHTML='<p class="err">'+e+'</p>'}}
-document.addEventListener('DOMContentLoaded',()=>{cargarCategorias();cargarCatalogo();});
+'use strict';
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const state = { products: [], toastTimer: null, searchTimer: null };
+
+function formObj(form) {
+  return Object.fromEntries(new FormData(form).entries());
+}
+
+function money(value) {
+  const amount = Number(value || 0);
+  return amount > 0
+    ? amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
+    : 'A cotizar';
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function safeUrl(value, fallback = '#') {
+  try {
+    const url = new URL(String(value || ''), window.location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function errorMessage(error) {
+  if (!error) return 'Ocurrió un error inesperado.';
+  if (typeof error === 'string') return error;
+  return error.message || String(error);
+}
+
+function call(functionName, ...args) {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !google.script || !google.script.run) {
+      reject(new Error('La conexión con Google Apps Script no está disponible.'));
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)[functionName](...args);
+  });
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+}
+
+function setButtonLoading(button, loading, label = 'Procesando...') {
+  if (!button) return;
+  if (loading) {
+    button.dataset.originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = label;
+  } else {
+    button.disabled = false;
+    button.innerHTML = button.dataset.originalHtml || button.innerHTML;
+  }
+}
+
+function toggleMenu(force) {
+  const nav = $('#mainNav');
+  const button = $('.menu-toggle');
+  if (!nav || !button) return;
+  const open = typeof force === 'boolean' ? force : !nav.classList.contains('open');
+  nav.classList.toggle('open', open);
+  button.setAttribute('aria-expanded', String(open));
+}
+
+function skeletonMarkup(count = 6) {
+  return Array.from({ length: count }, () => '<article class="skeleton" aria-hidden="true"></article>').join('');
+}
+
+function productPlaceholder() {
+  return '<div class="product-placeholder" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M18 37 35 15h30l17 22-32 48L18 37Zm0 0h64M35 15l15 22 15-22M35 37l15 48 15-48"/></svg></div>';
+}
+
+function productCard(product, index) {
+  const id = escapeHtml(product.productId || product.id || '');
+  const name = escapeHtml(product.nombre || 'Pieza sin nombre');
+  const description = escapeHtml(product.descripcion || 'Una pieza seleccionada para complementar tu estilo.');
+  const category = escapeHtml(product.categoria || 'Colección');
+  const material = escapeHtml(product.material || 'Demon Jewellery');
+  const imageUrl = safeUrl(product.imageUrl || product.imagen || '', '');
+  const whatsappUrl = safeUrl(product.whatsappUrl || (window.APP && APP.whatsappUrl) || '#', '#');
+  const number = String(index + 1).padStart(2, '0');
+
+  return `
+    <article class="product" data-product-id="${id}">
+      <div class="product-media">
+        <span class="product-badge">${category}</span>
+        ${imageUrl
+          ? `<img src="${escapeHtml(imageUrl)}" alt="${name}" loading="lazy" decoding="async">`
+          : productPlaceholder()}
+        <span class="product-index">${number}</span>
+      </div>
+      <div class="product-body">
+        <div class="product-meta">${material}</div>
+        <h3>${name}</h3>
+        <p class="product-description">${description}</p>
+        <div class="product-bottom">
+          <div class="price"><small>Precio</small>${escapeHtml(money(product.precioMXN || product.precio))}</div>
+          <div class="product-actions">
+            <a class="icon-btn" href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener" aria-label="Consultar ${name} por WhatsApp" title="Consultar por WhatsApp">
+              <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.9L3 20.5 4.5 16A8.4 8.4 0 1 1 21 11.5Z"/><path d="M8.5 8.5c.7 2.7 2.3 4.3 5 5"/></svg>
+            </a>
+            <button class="icon-btn" type="button" data-action="select" data-id="${id}" data-name="${name}" aria-label="Comprar ${name}" title="Seleccionar producto">
+              <svg viewBox="0 0 24 24"><path d="M4 6h2l2 10h9l2-7H7"/><circle cx="10" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>`;
+}
+
+function bindProductImages() {
+  $$('.product-media img').forEach(img => {
+    img.addEventListener('error', () => {
+      img.parentElement.innerHTML = productPlaceholder();
+    }, { once: true });
+  });
+}
+
+function updateHero(products) {
+  const image = $('#heroMainImg');
+  const media = $('#heroMedia');
+  const name = $('#heroProductName');
+  if (!image || !media || !name || !products.length) return;
+
+  const featured = products.find(item => safeUrl(item.imageUrl || item.imagen || '', '')) || products[0];
+  const imageUrl = safeUrl(featured.imageUrl || featured.imagen || '', '');
+  name.textContent = featured.nombre || 'DEMON JEWELLERY';
+
+  if (!imageUrl) return;
+  image.src = imageUrl;
+  image.hidden = false;
+  const placeholder = $('.jewel-placeholder', media);
+  if (placeholder) placeholder.hidden = true;
+  image.addEventListener('error', () => {
+    image.hidden = true;
+    if (placeholder) placeholder.hidden = false;
+  }, { once: true });
+}
+
+async function cargarCatalogo() {
+  const out = $('#catalogoGrid');
+  if (!out) return;
+  out.innerHTML = skeletonMarkup(window.innerWidth < 650 ? 3 : 6);
+
+  try {
+    const filters = {
+      q: ($('#q')?.value || '').trim(),
+      categoria: $('#categoria')?.value || ''
+    };
+    const result = await call('obtenerCatalogo', filters);
+    const products = Array.isArray(result) ? result : [];
+    state.products = products;
+
+    if (!products.length) {
+      out.innerHTML = `
+        <div class="catalog-empty">
+          <strong>No encontramos piezas</strong>
+          <p>Prueba con otra búsqueda o consulta directamente por WhatsApp.</p>
+          <a class="btn compact" href="${escapeHtml(safeUrl(APP.whatsappUrl, '#'))}" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+        </div>`;
+      return;
+    }
+
+    out.innerHTML = products.map(productCard).join('');
+    bindProductImages();
+    updateHero(products);
+  } catch (error) {
+    out.innerHTML = `
+      <div class="catalog-empty">
+        <strong>No fue posible cargar el catálogo</strong>
+        <p class="err">${escapeHtml(errorMessage(error))}</p>
+        <button class="btn compact" type="button" onclick="cargarCatalogo()">Intentar de nuevo</button>
+      </div>`;
+  }
+}
+
+function seleccionar(id, name) {
+  const input = $('[name="productId"]');
+  const label = $('#selectedProductName');
+  if (!input) return;
+  input.value = id;
+  if (label) label.textContent = name || id;
+  $('#selectedProductCard')?.classList.add('active');
+  showToast(`Producto seleccionado: ${name || id}`);
+  document.querySelector('#pedido')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function cargarCategorias() {
+  try {
+    const categories = Array.isArray(APP && APP.categories) && APP.categories.length
+      ? APP.categories
+      : await call('obtenerCategorias');
+    const select = $('#categoria');
+    if (!select) return;
+    select.innerHTML = '<option value="">Todas las categorías</option>' +
+      (Array.isArray(categories) ? categories : [])
+        .map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+        .join('');
+  } catch (_) {
+    // El catálogo sigue funcionando aunque las categorías no estén disponibles.
+  }
+}
+
+async function registrarPedido(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = $('#pedidoMsg');
+  const button = $('button[type="submit"]', form);
+  const payload = formObj(form);
+
+  if (!payload.productId) {
+    showToast('Selecciona primero una pieza del catálogo.');
+    document.querySelector('#catalogo')?.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
+  message.innerHTML = '<span class="loading-line">Registrando tu pedido</span>';
+  setButtonLoading(button, true, 'Generando pedido...');
+
+  try {
+    const response = await call('registrarCompra', payload);
+    if (!response || !response.ok) {
+      message.innerHTML = `<p class="err">${escapeHtml(response?.message || 'No se pudo registrar el pedido.')}</p>`;
+      return;
+    }
+
+    const data = response.data || {};
+    message.innerHTML = `
+      <div class="result-card">
+        <p class="ok"><b>Pedido registrado correctamente</b></p>
+        <p>Folio: <b>${escapeHtml(data.orderId || '')}</b></p>
+        <p>Referencia de pago: <b>${escapeHtml(data.paymentReference || '')}</b></p>
+        <p>Total: <b>${escapeHtml(money(data.totalMXN))}</b></p>
+        <div class="actions">
+          <a class="btn compact" target="_blank" rel="noopener" href="${escapeHtml(safeUrl(data.whatsappUrl || APP.whatsappUrl, '#'))}">Continuar en WhatsApp</a>
+        </div>
+      </div>`;
+    form.reset();
+    $('[name="productId"]', form).value = '';
+    $('#selectedProductName').textContent = 'Aún no has elegido una pieza';
+    showToast('Tu pedido fue registrado. Guarda tu folio.');
+  } catch (error) {
+    message.innerHTML = `<p class="err">${escapeHtml(errorMessage(error))}</p>`;
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function registrarDisenoWeb(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = $('#disenoMsg');
+  const button = $('button[type="submit"]', form);
+  message.innerHTML = '<span class="loading-line">Enviando tu solicitud</span>';
+  setButtonLoading(button, true, 'Enviando solicitud...');
+
+  try {
+    const response = await call('registrarDiseno', formObj(form));
+    if (!response || !response.ok) {
+      message.innerHTML = `<p class="err">${escapeHtml(response?.message || 'No se pudo registrar la solicitud.')}</p>`;
+      return;
+    }
+
+    const data = response.data || {};
+    message.innerHTML = `
+      <div class="result-card">
+        <p class="ok"><b>Solicitud registrada correctamente</b></p>
+        <p>Folio: <b>${escapeHtml(data.designId || '')}</b></p>
+        <div class="actions">
+          <a class="btn compact" target="_blank" rel="noopener" href="${escapeHtml(safeUrl(data.whatsappUrl || APP.whatsappUrl, '#'))}">Continuar en WhatsApp</a>
+        </div>
+      </div>`;
+    form.reset();
+    showToast('Recibimos tu idea. Guarda el folio de diseño.');
+  } catch (error) {
+    message.innerHTML = `<p class="err">${escapeHtml(errorMessage(error))}</p>`;
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function humanizeKey(key) {
+  return String(key)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/^./, character => character.toUpperCase());
+}
+
+function formatTracking(item) {
+  if (!item || typeof item !== 'object') return 'No hay información disponible.';
+  return Object.entries(item)
+    .filter(([, value]) => value !== '' && value !== null && value !== undefined)
+    .map(([key, value]) => `${humanizeKey(key)}: ${String(value)}`)
+    .join('\n');
+}
+
+async function consultar(event) {
+  event.preventDefault();
+  const output = $('#seguimientoMsg');
+  const button = $('button[type="submit"]', event.currentTarget);
+  output.textContent = 'Consultando...';
+  setButtonLoading(button, true, 'Consultando...');
+
+  try {
+    const response = await call('consultarSeguimiento', $('#folio').value.trim(), $('#contacto').value.trim());
+    output.textContent = response?.ok
+      ? formatTracking(response.data?.item)
+      : (response?.message || 'No se encontró información para ese folio.');
+  } catch (error) {
+    output.textContent = errorMessage(error);
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function table(rows) {
+  if (!Array.isArray(rows) || !rows.length) return '<p>Sin datos registrados.</p>';
+  const keys = Object.keys(rows[0]).slice(0, 10);
+  return `
+    <table>
+      <thead><tr>${keys.map(key => `<th>${escapeHtml(humanizeKey(key))}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(row => `<tr>${keys.map(key => `<td>${escapeHtml(row[key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>`;
+}
+
+async function loadAdmin(functionName) {
+  const output = $('#adminOut');
+  const pin = $('#pin').value.trim();
+  if (!pin) {
+    showToast('Ingresa el PIN de administración.');
+    $('#pin').focus();
+    return;
+  }
+  output.innerHTML = '<span class="loading-line">Cargando información</span>';
+
+  try {
+    const response = await call(functionName, pin);
+    output.innerHTML = response?.ok
+      ? table(response.data)
+      : `<p class="err">${escapeHtml(response?.message || 'Acceso no autorizado.')}</p>`;
+  } catch (error) {
+    output.innerHTML = `<p class="err">${escapeHtml(errorMessage(error))}</p>`;
+  }
+}
+
+function adminPedidos() { return loadAdmin('admin_listarPedidos'); }
+function adminDisenos() { return loadAdmin('admin_listarDisenos'); }
+
+function bindEvents() {
+  $('#catalogoGrid')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-action="select"]');
+    if (!button) return;
+    seleccionar(button.dataset.id, button.dataset.name);
+  });
+
+  $('#q')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      cargarCatalogo();
+    }
+  });
+
+  $('#q')?.addEventListener('input', () => {
+    clearTimeout(state.searchTimer);
+    state.searchTimer = setTimeout(cargarCatalogo, 450);
+  });
+
+  $('#categoria')?.addEventListener('change', cargarCatalogo);
+
+  $$('#mainNav a').forEach(link => link.addEventListener('click', () => toggleMenu(false)));
+
+  document.addEventListener('click', event => {
+    const nav = $('#mainNav');
+    const toggle = $('.menu-toggle');
+    if (nav?.classList.contains('open') && !nav.contains(event.target) && !toggle?.contains(event.target)) {
+      toggleMenu(false);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bindEvents();
+  cargarCategorias();
+  cargarCatalogo();
+});
 </script>
