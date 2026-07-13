@@ -1,19 +1,20 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <base target="_top">
+  <base target="_self">
   <meta charset="utf-8">
   <meta name="theme-color" content="#050505">
+  <link rel="canonical" href="<?= config.webAppUrl ?>">
   <?!= include('Styles'); ?>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#inicio" aria-label="Inicio">
+    <a class="brand" href="<?= config.webAppUrl ?>#inicio" target="_self" aria-label="Inicio">
       <span class="brand-mark">◆</span>
       <span><strong><?= config.appName ?></strong><small><?= config.tagline ?></small></span>
     </a>
     <nav>
-      <a href="#catalogo">Catálogo</a><a href="#nosotros">Nosotros</a><a href="#contacto">Contacto</a>
+      <a href="<?= config.webAppUrl ?>#catalogo" target="_self">Catálogo</a><a href="<?= config.webAppUrl ?>#nosotros" target="_self">Nosotros</a><a href="<?= config.webAppUrl ?>#contacto" target="_self">Contacto</a>
       <button id="cartButton" class="cart-btn">Carrito <span id="cartCount">0</span></button>
     </nav>
   </header>
@@ -24,7 +25,7 @@
         <p class="eyebrow">JOYERÍA ARTESANAL</p>
         <h1>Brilla con un estilo que no se repite.</h1>
         <p>Piezas seleccionadas para regalar, combinar y destacar todos los días.</p>
-        <a class="primary" href="#catalogo">Ver colección</a>
+        <a class="primary" href="<?= config.webAppUrl ?>#catalogo" target="_self">Ver colección</a>
       </div>
       <div class="hero-card"><div class="diamond">◇</div><p>DEMON<br>JEWELLERY</p><small>Brillante Estilo</small></div>
     </section>
@@ -41,7 +42,7 @@
 
     <section id="contacto" class="section contact">
       <h2>¿Buscas una pieza especial?</h2><p>Escríbenos y te ayudamos a elegir.</p>
-      <a id="whatsappLink" class="primary" href="#" target="_blank" rel="noopener">Contactar por WhatsApp</a>
+      <a id="whatsappLink" class="primary" href="<?= config.webAppUrl ?>#contacto" target="_blank" rel="noopener">Contactar por WhatsApp</a>
     </section>
   </main>
 
