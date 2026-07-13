@@ -1,130 +1,204 @@
-# Demon Jewellery — Apps Script WebApp
+# Demon Jewellery — WebApp 100% Google Apps Script
 
-Sitio web completo para **Demon Jewellery | Brillante Estilo** con catálogo, pedidos, solicitudes de diseños personalizados, panel admin básico y almacenamiento en Google Sheets.
+Aplicación web para **Demon Jewellery | Brillante Estilo** ejecutada completamente en Google Apps Script y conectada a Google Sheets.
 
-## Qué incluye
+El repositorio se usa únicamente para versionar y desplegar el proyecto con `clasp`. La WebApp no descarga HTML, CSS, JavaScript ni configuración desde GitHub durante su ejecución.
+
+## Funciones incluidas
 
 - Catálogo público alimentado desde la hoja `Catalogo`.
-- Formulario de compra con folio, referencia de pago y apertura automática de WhatsApp.
-- Formulario de diseño personalizado con presupuesto, material, talla e imagen de referencia.
-- Consulta de pedido por folio + correo/WhatsApp.
-- Panel admin protegido por PIN para ver pedidos y diseños.
-- Auditoría de acciones en la hoja `Auditoria`.
-- Soporte para cargar HTML/CSS/JS y assets desde GitHub.
-- Assets incluidos en `/assets/img` y manifiesto en `/assets/manifest.json`.
+- Búsqueda y filtros por categoría.
+- Registro de pedidos con folio y referencia de pago.
+- Solicitudes de diseños personalizados.
+- Seguimiento por folio y dato de contacto.
+- Panel administrativo protegido por PIN.
+- Registro de auditoría en Google Sheets.
+- Interfaz adaptable para celular, tableta y escritorio.
+- Integración de contacto por WhatsApp.
 
-## Estructura
+## Arquitectura
 
 ```text
-src/                 Archivos que se suben a Apps Script con clasp
-frontend/            Copia remota del frontend para leerse desde GitHub
-assets/img/          Imágenes y logo de Demon Jewellery
-assets/manifest.json Manifiesto de imágenes
-assets-base64/       Respaldo textual de assets para GitHub si no se suben binarios
-docs/                Guías de instalación y esquema de hojas
+src/
+├── Code.gs          Entrada de la WebApp, setup y diagnóstico
+├── Config.gs        Configuración general
+├── Database.gs      Acceso y esquema de Google Sheets
+├── Catalogo.gs      Catálogo público
+├── Pedidos.gs       Pedidos, diseños y seguimiento
+├── Admin.gs         Operaciones administrativas
+├── Index.html       Interfaz principal
+├── Styles.html      Estilos incluidos localmente
+├── Scripts.html     JavaScript incluido localmente
+└── appsscript.json  Manifiesto de Apps Script
 ```
 
-## Instalación rápida con clasp
+Los archivos bajo `frontend/`, `assets/` o módulos remotos antiguos no son necesarios para ejecutar esta versión.
 
-1. Instala clasp:
+## Requisitos
+
+- Cuenta de Google.
+- Node.js instalado.
+- `clasp` instalado.
+- Una hoja de cálculo de Google Sheets.
+
+## Instalación con clasp
+
+### 1. Instalar clasp
 
 ```bash
 npm install -g @google/clasp
 clasp login
 ```
 
-2. Crea un proyecto Apps Script o usa uno existente.
+### 2. Clonar el repositorio
+
+```bash
+git clone https://github.com/soportehelpdeskusae-coder/usae.git
+cd usae
+git checkout agent/appscript-only
+```
+
+### 3. Crear un proyecto nuevo de Apps Script
+
+Desde la raíz del repositorio:
 
 ```bash
 clasp create --type webapp --title "Demon Jewellery" --rootDir src
 ```
 
-3. Copia el `scriptId` generado en `.clasp.json`. Puedes partir de `.clasp.json.template`.
+Esto crea el archivo `.clasp.json` con el `scriptId` del proyecto.
 
-4. Sube el código:
+Para usar un proyecto existente, crea `.clasp.json` con:
+
+```json
+{
+  "scriptId": "TU_SCRIPT_ID",
+  "rootDir": "src"
+}
+```
+
+### 4. Subir el código
 
 ```bash
 clasp push
 ```
 
-5. En Apps Script, ejecuta una vez:
+### 5. Configurar Google Sheets
+
+Abre el proyecto en Apps Script:
+
+```bash
+clasp open
+```
+
+Ejecuta una vez una de estas opciones:
 
 ```javascript
-setup()
+setup('https://docs.google.com/spreadsheets/d/ID_DE_TU_HOJA/edit');
 ```
 
-El sistema creará o validará las hojas `Catalogo`, `Pedidos`, `Disenos`, `Clientes`, `Auditoria` y `Configuracion`.
-
-6. Despliega como WebApp:
-
-- Ejecutar como: tu usuario.
-- Acceso: cualquier persona.
-
-## Conectar el sitio a GitHub para cargar frontend y assets
-
-Después de subir el repositorio a GitHub, ejecuta en Apps Script:
+O, si el proyecto está vinculado directamente a una hoja:
 
 ```javascript
-setupRemoteFromGitHub('soportehelpdeskusae-coder/usae', 'main')
+setup();
 ```
 
-Para repositorio privado:
+La función crea o valida estas pestañas:
+
+- `Catalogo`
+- `Pedidos`
+- `Disenos`
+- `Clientes`
+- `Auditoria`
+- `Configuracion`
+
+El PIN administrativo inicial es `1234`. Cámbialo antes de publicar:
 
 ```javascript
-setupRemoteFromGitHub('soportehelpdeskusae-coder/usae', 'main', 'GITHUB_TOKEN_SOLO_LECTURA')
+setAdminPin('UN_PIN_SEGURO');
 ```
 
-El backend `.gs` debe estar desplegado en Apps Script; Apps Script no puede reemplazar de forma segura todo el backend desde GitHub en tiempo real. El flujo correcto es:
+### 6. Comprobar la instalación
 
-- Código `.gs`: versionado en GitHub y desplegado con `clasp push`.
-- HTML/CSS/JS/assets: pueden cargarse desde GitHub con `DJ_USE_REMOTE_HTML=true`.
-- Base de datos: se mantiene en Google Sheets.
-
-## Cambiar PIN admin
-
-Ejecuta en Apps Script:
+Ejecuta:
 
 ```javascript
-setAdminPin('TU_PIN_NUEVO')
+diagnostico();
 ```
 
-El PIN inicial generado por `setup()` es `1234`. Cámbialo antes de producción.
-
-## Editar catálogo
-
-Edita la hoja `Catalogo`. Campos importantes:
-
-- `activo`: usa `SI` para mostrar el producto.
-- `destacado`: usa `SI` para marcar destacado.
-- `imagen`: puede ser URL completa o ruta relativa como `img/producto_01.jpg`.
-- `precioMXN`: usa número. Si es `0`, el sitio muestra `A cotizar`.
-
-## Assets incluidos
-
-Las imágenes principales pueden subirse a `assets/img`. También se puede usar el respaldo textual en `assets-base64/` para conservar todos los recursos dentro de GitHub aunque el conector no permita escribir binarios.
-
-## GitHub Pages / raw assets
-
-Si el repositorio es público, las imágenes se cargan con:
-
-```text
-https://raw.githubusercontent.com/OWNER/REPO/main/assets/img/archivo.jpg
-```
-
-Si quieres usar GitHub Pages o CDN, ejecuta:
+El resultado debe indicar:
 
 ```javascript
-setPublicAssetsBaseUrl('https://OWNER.github.io/REPO/assets/')
+ready: true
 ```
 
-## Archivos principales
+### 7. Desplegar como aplicación web
 
-- `src/Code.gs`: entrada WebApp y setup.
-- `src/Config.gs`: configuración global.
-- `src/GitHubRemote.gs`: lectura remota desde GitHub.
-- `src/Database.gs`: esquema y utilidades de Sheets.
-- `src/Catalogo.gs`: API pública del catálogo.
-- `src/Pedidos.gs`: compras, diseños y seguimiento.
-- `src/Admin.gs`: panel interno.
-- `src/Index.html`, `src/Styles.html`, `src/Scripts.html`: frontend local.
-- `frontend/*`: frontend remoto para GitHub.
+En Apps Script:
+
+1. Abre **Implementar > Nueva implementación**.
+2. Selecciona **Aplicación web**.
+3. En **Ejecutar como**, selecciona tu cuenta.
+4. En **Quién tiene acceso**, selecciona **Cualquier persona**.
+5. Pulsa **Implementar**.
+
+También puedes desplegar con `clasp`:
+
+```bash
+clasp version "Primera versión Apps Script"
+clasp deploy --description "Demon Jewellery WebApp"
+```
+
+## Configuración inicial del catálogo
+
+En la hoja `Catalogo`, usa las columnas creadas por `setup()`.
+
+Campos principales:
+
+- `productId`: identificador único, por ejemplo `DJ-001`.
+- `nombre`: nombre comercial.
+- `categoria`: collar, anillo, pulsera, dije, etc.
+- `descripcion`: descripción del producto.
+- `material`: plata, acero, chapa, etc.
+- `precioMXN`: precio numérico.
+- `stock`: cantidad disponible.
+- `imagen`: URL HTTPS pública de la fotografía.
+- `tags`: palabras separadas por comas.
+- `activo`: `SI` para mostrarlo.
+- `destacado`: `SI` para usarlo como producto destacado.
+
+Las imágenes pueden estar en Google Drive con enlace público, Google Photos mediante una URL directa o cualquier alojamiento HTTPS. Si una imagen no está disponible, la interfaz muestra un marcador gráfico integrado.
+
+## Actualizar la aplicación
+
+Después de modificar archivos dentro de `src/`:
+
+```bash
+clasp push
+clasp version "Descripción del cambio"
+clasp deploy --deploymentId TU_DEPLOYMENT_ID --description "Actualización"
+```
+
+## Seguridad
+
+- Cambia el PIN administrativo inicial.
+- No guardes contraseñas, tokens o claves privadas en `Config.gs`.
+- Usa Propiedades del script para información sensible.
+- Limita la edición de la hoja de cálculo a personal autorizado.
+- Revisa periódicamente la hoja `Auditoria`.
+- La aplicación solicita únicamente permisos de Google Sheets e identificación básica del usuario ejecutor.
+
+## Archivos de ejecución
+
+La versión 100% Apps Script utiliza directamente:
+
+- `src/Code.gs`
+- `src/Config.gs`
+- `src/Database.gs`
+- `src/Catalogo.gs`
+- `src/Pedidos.gs`
+- `src/Admin.gs`
+- `src/Index.html`
+- `src/Styles.html`
+- `src/Scripts.html`
+- `src/appsscript.json`
