@@ -1,14 +1,13 @@
 /**
- * Demon Jewellery — Configuración general
- * Mantén aquí los datos públicos de la tienda.
+ * Demon Jewellery — configuración general para Google Apps Script.
+ * Mantén aquí únicamente datos públicos de la tienda.
  */
 const DJ_CONFIG = {
   APP_NAME: 'Demon Jewellery',
   TAGLINE: 'Brillante Estilo',
-  VERSION: '1.0.0',
+  VERSION: '2.0.0',
   TIMEZONE: 'America/Mexico_City',
   CURRENCY: 'MXN',
-  DEFAULT_BRANCH: 'main',
   CONTACT: {
     whatsapp: '5215500000000',
     email: 'ventas@demonjewellery.com',
@@ -17,12 +16,7 @@ const DJ_CONFIG = {
   },
   PROPS: {
     spreadsheetId: 'DJ_SPREADSHEET_ID',
-    adminPin: 'DJ_ADMIN_PIN',
-    githubRepo: 'DJ_GITHUB_REPO',
-    githubRef: 'DJ_GITHUB_REF',
-    githubToken: 'DJ_GITHUB_TOKEN',
-    useRemoteHtml: 'DJ_USE_REMOTE_HTML',
-    publicAssetsBaseUrl: 'DJ_PUBLIC_ASSETS_BASE_URL'
+    adminPin: 'DJ_ADMIN_PIN'
   },
   SHEETS: {
     catalogo: 'Catalogo',
@@ -63,17 +57,16 @@ const DJ_CONFIG = {
     payment: ['PENDIENTE', 'VALIDANDO', 'PAGADO', 'RECHAZADO']
   },
   DEFAULT_ASSETS: {
-    logo: 'img/logo_demon_jewellery.png',
-    hero: 'img/producto_01.jpg',
-    producto1: 'img/producto_01.jpg',
-    producto2: 'img/producto_02.jpg',
-    producto3: 'img/producto_03.jpg',
-    producto4: 'img/producto_04.jpg'
+    logo: '',
+    hero: '',
+    producto1: '',
+    producto2: '',
+    producto3: '',
+    producto4: ''
   }
 };
 
 function web_getClientConfig() {
-  const props = PropertiesService.getScriptProperties();
   return {
     appName: DJ_CONFIG.APP_NAME,
     tagline: DJ_CONFIG.TAGLINE,
@@ -81,9 +74,9 @@ function web_getClientConfig() {
     currency: DJ_CONFIG.CURRENCY,
     contact: DJ_CONFIG.CONTACT,
     whatsappUrl: buildWhatsappUrl_('Hola, quiero información de Demon Jewellery.'),
-    assetBaseUrl: remote_getAssetBaseUrl_(),
-    defaultAssets: (typeof asset_getDefaultAssets_ === 'function') ? asset_getDefaultAssets_() : DJ_CONFIG.DEFAULT_ASSETS,
-    remoteHtml: props.getProperty(DJ_CONFIG.PROPS.useRemoteHtml) === 'true',
+    assetBaseUrl: '',
+    defaultAssets: DJ_CONFIG.DEFAULT_ASSETS,
+    runtime: 'APPS_SCRIPT_ONLY',
     categories: obtenerCategorias()
   };
 }
@@ -103,7 +96,9 @@ function money_(value) {
 }
 
 function toBool_(value) {
-  return String(value || '').trim().toUpperCase() === 'SI' || value === true || String(value).toLowerCase() === 'true';
+  return String(value || '').trim().toUpperCase() === 'SI' ||
+    value === true ||
+    String(value).toLowerCase() === 'true';
 }
 
 function clean_(value) {
