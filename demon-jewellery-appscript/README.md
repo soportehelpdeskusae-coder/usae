@@ -2,6 +2,16 @@
 
 Tienda web embebible en Google Sites, con backend en Google Apps Script y datos en Google Sheets. El repositorio Git mantiene el código y GitHub Actions puede sincronizarlo con Apps Script.
 
+## Aplicación publicada
+
+URL actual de la aplicación web:
+
+https://script.google.com/macros/s/AKfycbzjWlAy0Q-GN_n6SOfLepYlW0KF5Au5AHVhetLSnUx4DQDLDYztVFqNnF_XFF0sDXNc/exec
+
+Esta es la URL que debe incorporarse en Google Sites mediante **Insertar → Incorporar → URL**.
+
+> Importante: el valor `AKfycb...` corresponde al identificador de la implementación web, no al `scriptId` del proyecto. Para `APPS_SCRIPT_ID` y `.clasp.json` debes usar el ID del proyecto disponible en **Configuración del proyecto → ID de secuencia de comandos** dentro de Apps Script.
+
 ## Instalación
 
 1. Crea una hoja de cálculo de Google.
@@ -22,7 +32,11 @@ Copia la URL terminada en `/exec`.
 
 ## Insertar en Google Sites
 
-En Google Sites usa **Insertar → Incorporar → URL**, pega la URL `/exec` y ajusta el alto del bloque. El backend usa `setXFrameOptionsMode(ALLOWALL)` para permitir la incorporación.
+En Google Sites usa **Insertar → Incorporar → URL** y pega:
+
+https://script.google.com/macros/s/AKfycbzjWlAy0Q-GN_n6SOfLepYlW0KF5Au5AHVhetLSnUx4DQDLDYztVFqNnF_XFF0sDXNc/exec
+
+Ajusta el alto del bloque. El backend usa `setXFrameOptionsMode(ALLOWALL)` para permitir la incorporación.
 
 ## Sincronizar con GitHub usando clasp
 
