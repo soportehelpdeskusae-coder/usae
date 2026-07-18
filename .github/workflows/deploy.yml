@@ -7,17 +7,76 @@ on:
     paths:
       - 'src/**'
       - '.github/workflows/deploy.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - 'src/**'
+      - '.github/workflows/deploy.yml'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: apps-script-deploy-main
+  group: apps-script-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Validar JSON y sintaxis
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "JSON.parse(require('fs').readFileSync('src/appsscript.json','utf8')); console.log('appsscript.json válido')"
+
+          for file in src/*.gs; do
+            [ -e "$file" ] || continue
+            node --check <(cat "$file")
+            echo "Sintaxis válida: $file"
+          done
+
+          for file in src/*.html; do
+            [ -e "$file" ] || continue
+            if grep -q '<script' "$file"; then
+              awk '/<script>/{flag=1;next}/<\/script>/{flag=0}flag' "$file" > /tmp/script-check.js
+              if [ -s /tmp/script-check.js ]; then
+                node --check /tmp/script-check.js
+                echo "JavaScript válido: $file"
+              fi
+            fi
+          done
+
+      - name: Revisar estructura de Apps Script
+        run: |
+          test -f src/Code.gs
+          test -f src/Config.gs
+          test -f src/Backend.gs
+          test -f src/Index.html
+          test -f src/Styles.html
+          test -f src/Scripts.html
+          test -f src/appsscript.json
+          echo "Estructura completa"
+
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:
@@ -37,30 +96,52 @@ jobs:
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        shell: bash
         run: |
-          if [ -z "$CLASPRC_JSON" ]; then
-            echo "::error::Falta el secreto CLASPRC_JSON"
-            exit 1
-          fi
+          set -euo pipefail
+          [ -n "$CLASPRC_JSON" ] || { echo "::error::Falta el secreto CLASPRC_JSON"; exit 1; }
+          [ -n "$SCRIPT_ID" ] || { echo "::error::Falta el secreto SCRIPT_ID"; exit 1; }
 
-          if [ -z "$SCRIPT_ID" ]; then
-            echo "::error::Falta el secreto SCRIPT_ID"
-            exit 1
-          fi
-
-      - name: Configurar clasp
+      - name: Configurar clasp de forma segura
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        shell: bash
         run: |
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          printf '{"scriptId":"%s","rootDir":"src"}\n' "$SCRIPT_ID" > .clasp.json
+          set -euo pipefail
 
-      - name: Validar configuración JSON
+          node <<'NODE'
+          const fs = require('fs');
+          const raw = process.env.CLASPRC_JSON || '';
+          const candidates = [raw];
+          try { candidates.push(Buffer.from(raw, 'base64').toString('utf8')); } catch (_) {}
+
+          let parsed = null;
+          for (const candidate of candidates) {
+            try {
+              const value = JSON.parse(candidate.trim());
+              if (value && typeof value === 'object') {
+                parsed = value;
+                break;
+              }
+            } catch (_) {}
+          }
+
+          if (!parsed) {
+            console.error('::error::CLASPRC_JSON no contiene JSON válido ni JSON codificado en Base64.');
+            process.exit(1);
+          }
+
+          fs.writeFileSync(`${process.env.HOME}/.clasprc.json`, JSON.stringify(parsed, null, 2) + '\n', { mode: 0o600 });
+          fs.writeFileSync('.clasp.json', JSON.stringify({ scriptId: process.env.SCRIPT_ID.trim(), rootDir: 'src' }, null, 2) + '\n');
+          NODE
+
+      - name: Validar configuración generada
         run: |
-          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.clasprc.json', 'utf8')); console.log('CLASPRC_JSON válido')"
-          node -e "JSON.parse(require('fs').readFileSync('.clasp.json', 'utf8')); console.log('.clasp.json válido')"
-          node -e "JSON.parse(require('fs').readFileSync('src/appsscript.json', 'utf8')); console.log('appsscript.json válido')"
+          set -euo pipefail
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.clasprc.json','utf8')); console.log('CLASPRC_JSON válido')"
+          node -e "const c=JSON.parse(require('fs').readFileSync('.clasp.json','utf8')); if(!c.scriptId) throw new Error('SCRIPT_ID vacío'); console.log('.clasp.json válido')"
+          node -e "JSON.parse(require('fs').readFileSync('src/appsscript.json','utf8')); console.log('appsscript.json válido')"
 
       - name: Revisar archivos de Apps Script
         run: npx clasp status
