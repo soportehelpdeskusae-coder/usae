@@ -48,7 +48,8 @@ jobs:
 
           for file in src/*.gs; do
             [ -e "$file" ] || continue
-            node --check <(cat "$file")
+            cp "$file" /tmp/apps-script-check.js
+            node --check /tmp/apps-script-check.js
             echo "Sintaxis válida: $file"
           done
 
