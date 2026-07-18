@@ -5,7 +5,7 @@
 const DJ_CONFIG = {
   APP_NAME: 'Demon Jewellery',
   TAGLINE: 'Brillante Estilo',
-  VERSION: '1.0.0',
+  VERSION: '1.0.1',
   TIMEZONE: 'America/Mexico_City',
   CURRENCY: 'MXN',
   DEFAULT_BRANCH: 'main',
