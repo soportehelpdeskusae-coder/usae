@@ -1,0 +1,26 @@
+name: Sync to Google Apps Script
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.gs'
+      - '**.html'
+      - 'appsscript.json'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm install
+      - name: Configure clasp
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"."}' '${{ secrets.APPS_SCRIPT_ID }}' > .clasp.json
+      - name: Push source
+        run: npx clasp push --force
