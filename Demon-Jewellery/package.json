@@ -1,0 +1,1 @@
+{"name":"demon-jewellery-appscript","private":true,"version":"1.0.0","scripts":{"login":"clasp login","pull":"clasp pull","push":"clasp push","deploy":"clasp push && clasp deploy"},"devDependencies":{"@google/clasp":"^3.0.0"}}
