@@ -1,0 +1,28 @@
+name: Sync Demon Jewellery to Google Apps Script
+
+on:
+  push:
+    branches: [demon-jewellery-appscript]
+    paths:
+      - 'demon-jewellery-appscript/**'
+      - '.github/workflows/demon-jewellery-push-to-appscript.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demon-jewellery-appscript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm install
+      - name: Configure clasp
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"."}' '${{ secrets.APPS_SCRIPT_ID }}' > .clasp.json
+      - name: Push source
+        run: npx clasp push --force
